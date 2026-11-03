@@ -1,0 +1,18 @@
+# Virtual environment
+.venv/
+
+# Editor and workspace settings
+.vscode/
+*.code-workspace
+
+# Personal planning notes and decision log
+project-notes/
+DECISIONS.md
+
+# Datasets (fetched or downloaded locally, never committed)
+data/
+
+# Python and tool caches
+__pycache__/
+.pytest_cache/
+.ruff_cache/
