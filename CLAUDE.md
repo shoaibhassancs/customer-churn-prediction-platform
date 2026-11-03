@@ -53,16 +53,21 @@ uv sync                      # create .venv and install exact versions from uv.l
 uv add <package>             # add a dependency (updates pyproject.toml and uv.lock)
 uv run python <file>         # run a script inside the pinned environment
 uv run python -m churn_platform.<module>   # run a module from the package
+uv run pytest                # run the tests in tests/
 ```
 Always go through `uv run` (or the activated `.venv`) so the pinned environment is
-used. Installed so far: pandas and scikit-learn only.
-Add new commands here as they start to work (pytest, ruff); do not list ones that
-do not work yet.
+used. Installed so far: pandas and scikit-learn; dev-only: pytest and ipykernel.
+Add new commands here as they start to work (ruff); do not list ones that do not
+work yet.
 
 ## How we work (read before changing anything)
 - **The user drives, Claude advises.** One small step at a time, then stop and wait.
   Ask before each phase and before each step. Never write several files at once
-  without a go-ahead, and never add extra scope unasked (suggest it instead).
+  without a go-ahead.
+- **Only required steps.** Do only what `SCOPE.md` and `PLAN.md` need. Before any
+  extra feature, tool or "logical next step" that is outside scope or just nice to
+  have, say so and why it may not be needed, and wait. Do not propose extras that
+  serve no real purpose for this project.
 - **The user chooses every tool and design.** Before a non-trivial choice (library,
   model, storage, structure), give a decision card: the decision, a recommendation
   with its main downside, the realistic alternatives, the cost of changing later,
@@ -79,8 +84,10 @@ do not work yet.
   user's decision. If unsure of a version or an API, check instead of guessing.
 - **Do not tune off a single run.** One surprising metric, flaky test or odd result
   needs a second data point before it is called a bug or a fix.
-- **Version control:** git on `main`, no remote yet. Make changes on a branch and
-  merge with a real description, even when solo; use PRs once a GitHub remote exists.
+- **Version control:** git on `main`, no remote yet. The user makes every commit
+  and branch themselves. Claude never commits and never suggests committing.
+- **Decision log:** Claude updates `DECISIONS.md` automatically after each decision
+  or step, without asking.
 
 ## Code conventions
 - PEP 8: `snake_case` for functions, variables, modules and files; `PascalCase` for

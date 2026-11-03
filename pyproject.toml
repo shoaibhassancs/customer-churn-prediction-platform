@@ -15,3 +15,9 @@ build-backend = "uv_build"
 # The project name has hyphens and differs from the package folder, so say which
 # folder under src/ is the package.
 module-name = "churn_platform"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.4.0",
+    "pytest>=9.2.0",
+]
