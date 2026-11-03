@@ -6,3 +6,12 @@ dependencies = [
     "pandas>=3.1.0",
     "scikit-learn>=1.9.1",
 ]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+# The project name has hyphens and differs from the package folder, so say which
+# folder under src/ is the package.
+module-name = "churn_platform"
