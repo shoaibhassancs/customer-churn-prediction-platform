@@ -32,7 +32,11 @@ package under `src/`, with tests outside it mirroring its structure. Items marke
 customer-churn-prediction-platform/
 ├── project-notes/        planning notes (PLAN.md, GUIDE.md), git-ignored
 ├── src/
-│   └── churn_platform/   application package (all importable code), empty so far
+│   └── churn_platform/   application package (all importable code)
+│       ├── cleaning.py       1. fixed rules: TotalCharges, yes/no flags, Churn 0/1
+│       ├── splitting.py      2. stratified random train/test split
+│       ├── preprocessing.py  3. one-hot, scaling, passthrough (fitted on train only)
+│       └── pipeline.py       4. chains cleaning + preprocessing into one object
 ├── tests/                pytest tests, mirroring src/churn_platform/
 ├── data/                 git-ignored datasets: raw/ (untouched downloads), processed/ (planned)
 ├── .python-version       Python 3.12
@@ -80,6 +84,13 @@ work yet.
   why in plain language before any code. After each file, give short revision notes
   in chat (imports, data structures with example values, functions, key idea, two or
   three self-check questions without answers).
+- **Run it together, then wait.** After building a piece, give the user commands to
+  run and inspect the output themselves, and say what to look for. Do not mention or
+  preview the next step until the user says "next step".
+- **Define terms where they appear.** Name the real ML concept (for example
+  "overfitting", not "unreliable") and give a one-line plain definition the first time
+  a term or metric shows up (PR-AUC, stratified, leakage). Keep revising core ML and
+  Python ideas as the code appears.
 - **Be honest.** If a choice looks like a poor fit, say so once, then follow the
   user's decision. If unsure of a version or an API, check instead of guessing.
 - **Do not tune off a single run.** One surprising metric, flaky test or odd result
