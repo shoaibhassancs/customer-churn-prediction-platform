@@ -74,9 +74,20 @@ def test_training_shows_scores_a_saved_model_and_the_random_split_warning(
 
     assert not app.exception
     assert (tmp_path / "model.joblib").exists()
-    assert any("Model trained and saved" in s.value for s in app.success)
+    assert any("Four models compared" in s.value for s in app.success)
     scores = app.dataframe[0].value
-    assert scores.index.tolist() == ["majority", "logistic"]
+    assert scores.index.tolist() == [
+        "majority",
+        "logistic",
+        "random_forest",
+        "gradient_boosting",
+    ]
+    assert any("PR-AUC" in i.value for i in app.info[1:])
+    assert "Held-back check" in [h.value for h in app.subheader]
+    held_back = app.dataframe[1].value
+    assert held_back.shape == (4, 1)
+    assert "Top drivers" in [h.value for h in app.subheader]
+    assert app.dataframe[2].value.columns.tolist() == ["PR-AUC drop when shuffled"]
     assert any("Random split" in w.value for w in app.warning)
 
 

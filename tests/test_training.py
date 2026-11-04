@@ -6,12 +6,19 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from churn_platform import training
 from churn_platform.preprocessing import build_preprocessor
 from churn_platform.scoring import score_customers
 from churn_platform.training import TrainingResult, train_baseline
 
 # The random-split warning is tested in test_splitting; here it would only add noise.
 pytestmark = pytest.mark.filterwarnings("ignore:Random split")
+
+CLASS_NAMES = {
+    "logistic": "LogisticRegression",
+    "random_forest": "RandomForestClassifier",
+    "gradient_boosting": "HistGradientBoostingClassifier",
+}
 
 
 def make_raw_customers(n: int = 300) -> pd.DataFrame:
@@ -52,14 +59,85 @@ def test_result_holds_a_fitted_pipeline_that_can_score_raw_customers() -> None:
     assert len(scored) == len(result.X_test)
 
 
-def test_cv_scores_compare_both_baselines_and_logistic_wins() -> None:
+def test_cv_scores_compare_all_four_models_and_logistic_beats_the_floor() -> None:
     result = train_baseline(make_raw_customers(), make_small_preprocessor())
 
     scores = result.cv_scores
 
-    assert scores.index.tolist() == ["majority", "logistic"]
+    assert scores.index.tolist() == [
+        "majority",
+        "logistic",
+        "random_forest",
+        "gradient_boosting",
+    ]
     assert scores.loc["majority", "roc_auc_mean"] == pytest.approx(0.5)
     assert scores.loc["logistic", "roc_auc_mean"] > 0.8
+
+
+def test_the_verdict_covers_each_challenger_with_a_true_or_false() -> None:
+    result = train_baseline(make_raw_customers(), make_small_preprocessor())
+
+    verdict = result.beats_baselines
+
+    assert verdict.index.tolist() == ["random_forest", "gradient_boosting"]
+    assert verdict.dtype == bool
+
+
+def test_the_chosen_model_gets_a_one_time_check_on_the_held_back_rows() -> None:
+    result = train_baseline(make_raw_customers(), make_small_preprocessor())
+
+    assert result.test_scores.index.tolist() == [
+        "pr_auc",
+        "roc_auc",
+        "recall_top_10",
+        "brier",
+    ]
+    assert result.test_scores["roc_auc"] > 0.8
+
+
+def test_drivers_rank_the_model_input_columns_and_count_the_stable_ones() -> None:
+    result = train_baseline(make_raw_customers(), make_small_preprocessor())
+
+    assert result.drivers.index[0] == "tenure"
+    assert "customerID" not in result.drivers.index
+    assert 0 <= result.shared_drivers <= 10
+
+
+def test_the_fitted_model_is_the_one_the_result_names() -> None:
+    result = train_baseline(make_raw_customers(), make_small_preprocessor())
+
+    fitted_class = type(result.pipeline.steps[-1][1]).__name__
+    assert result.chosen_model in {"logistic", "random_forest", "gradient_boosting"}
+    assert fitted_class == CLASS_NAMES[result.chosen_model]
+
+
+def fake_scores(forest_pr_auc: float) -> pd.DataFrame:
+    """A score table where the forest has the given PR-AUC and the rest are fixed."""
+    pr_auc = {
+        "majority": 0.27,
+        "logistic": 0.60,
+        "random_forest": forest_pr_auc,
+        "gradient_boosting": 0.60,
+    }
+    return pd.DataFrame({"pr_auc_mean": pr_auc})
+
+
+def test_a_challenger_that_clears_the_margin_is_fitted_and_chosen(monkeypatch) -> None:
+    monkeypatch.setattr(training, "cross_validate_models", lambda *a: fake_scores(0.65))
+
+    result = train_baseline(make_raw_customers(), make_small_preprocessor())
+
+    assert result.chosen_model == "random_forest"
+    assert type(result.pipeline.steps[-1][1]).__name__ == "RandomForestClassifier"
+
+
+def test_logistic_is_fitted_when_no_challenger_clears_the_margin(monkeypatch) -> None:
+    monkeypatch.setattr(training, "cross_validate_models", lambda *a: fake_scores(0.61))
+
+    result = train_baseline(make_raw_customers(), make_small_preprocessor())
+
+    assert result.chosen_model == "logistic"
+    assert type(result.pipeline.steps[-1][1]).__name__ == "LogisticRegression"
 
 
 def test_test_rows_are_held_back_with_matching_zero_one_labels() -> None:

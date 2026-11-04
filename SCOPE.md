@@ -3,7 +3,8 @@
 ## Solution (one-liner)
 A web app where a user uploads a customer file and gets back each customer's
 churn probability, the main reasons behind it, and a recommended retention action.
-A person always approves which model becomes the champion.
+The model used for scoring is chosen automatically by a fixed rule: logistic
+regression, unless a challenger beats both baselines by an agreed margin.
 
 ## In Scope
 - Public datasets (telecom, bank), a synthetic data generator, and deliberately
@@ -16,8 +17,8 @@ A person always approves which model becomes the champion.
 - Automatic exploratory report (churn rate, distributions, segments, missingness)
 - Feature engineering with a leakage check for every feature
 - At least four models, including a baseline, trained in one background job
-- Model comparison (PR-AUC, ROC-AUC, lift, calibration) and manual promotion of a
-  champion
+- Model comparison (PR-AUC, ROC-AUC, lift, calibration) and automatic selection of
+  the scoring model by the margin rule, with the leaderboard shown
 - Churn probability for one customer or a whole file, with risk band
 - Global and per-customer explanations of what drives churn
 - Rule-based retention recommendations, ranked by expected value

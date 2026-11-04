@@ -12,6 +12,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from churn_platform.drivers import STABILITY_SEEDS, TOP_N
+from churn_platform.evaluation import PR_AUC_MARGIN
 from churn_platform.ingest import (
     TRAIN_MODE,
     UploadError,
@@ -25,10 +27,27 @@ MODEL_PATH_ENV = "CHURN_MODEL_PATH"
 DEFAULT_MODEL_PATH = "models/baseline.joblib"
 PREVIEW_ROWS = 20
 METRIC_HELP = (
-    "**PR-AUC**: how well the model ranks customers who really leave above the "
-    "rest. Guessing scores about the share of customers who leave. "
-    "**ROC-AUC**: the chance a customer who left is ranked above one who stayed "
-    "(0.5 is a coin flip, 1.0 is perfect). Higher is better for both."
+    "PR-AUC: Measures how well the model ranks customers who leave above those "
+    "who stay. A guessing model scores about the same as the churn rate.\n\n"
+    "ROC-AUC: Measures how often the model ranks a customer who leaves above one "
+    "who stays. A score of 0.5 is like a coin flip; 1.0 is perfect.\n\n"
+    "Higher scores are better for both."
+)
+TEST_HELP = (
+    "**Test results:** The model was checked on 20% of the customers it had not "
+    "seen during training.\n\n"
+    "**Riskiest 10%:** If you contact the 10% of customers the model ranks most "
+    "likely to leave, this shows what share of all customers who left would be in "
+    "that group.\n\n"
+    "**Brier score:** Measures how close the model’s predicted chances are to what "
+    "actually happened. Lower is better; 0 is perfect. This score is high partly "
+    "because class weighting pushes the predicted chances upward."
+)
+DRIVERS_HELP = (
+    "**Top drivers:** The columns the model relies on most. Each column's values are "
+    "shuffled among the held-back customers, and the drop in PR-AUC shows how much "
+    "the model needed that column. A bigger drop means a stronger driver.\n\n"
+    "This shows which columns matter, not whether they raise or lower the risk."
 )
 
 
@@ -38,8 +57,9 @@ def main() -> None:
     st.title("Customer churn predictor")
     st.info("Demo only: please do not upload real personal data.")
     st.write(
-        "Upload a CSV with one row per customer. With a `Churn` column (Yes or No) "
-        "you can train a model; with or without it you can score the customers."
+        "Upload a CSV with one row per customer. Include a Churn column with “Yes” "
+        "or “No” to train a model. You can also upload a file without that column "
+        "to get churn risk scores for each customer."
     )
     uploaded = st.file_uploader("Customer file (CSV)", type="csv")
     if uploaded is None:
@@ -83,29 +103,83 @@ def _show_report(report: ValidationReport) -> None:
 
 
 def _train_section(path: Path, file_key: tuple) -> None:
-    st.subheader("Train a model")
+    st.subheader("Train and compare models")
     if st.button("Train a model on this file"):
         try:
             # Record warnings so the "random split" notice is visible on the screen.
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
-                result = train_from_file(path, _model_path())
+                with st.spinner("Training and comparing four models. Please wait..."):
+                    result = train_from_file(path, _model_path())
         except InvalidFileError as error:
             st.error(str(error))
             return
         notes = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
         st.session_state["trained"] = {
             "key": file_key,
+            "chosen": result.chosen_model,
             "scores": result.cv_scores.round(3),
+            "verdict": result.beats_baselines.to_dict(),
+            "test": result.test_scores.round(3),
+            "drivers": result.drivers.head(TOP_N).round(3),
+            "shared": result.shared_drivers,
             "notes": notes,
         }
     trained = st.session_state.get("trained")
     if trained and trained["key"] == file_key:
-        st.success(f"Model trained and saved to {_model_path()}")
+        st.success(
+            f"Four models compared. The {trained['chosen'].replace('_', ' ')} model "
+            f"was chosen by the margin rule, saved to {_model_path()} and is used "
+            "for scoring."
+        )
         st.dataframe(trained["scores"])
         st.caption(METRIC_HELP)
+        _show_verdict(trained["verdict"])
+        _show_test_check(trained["test"])
+        _show_drivers(trained["drivers"], trained["shared"])
         for note in trained["notes"]:
             st.warning(note)
+
+
+def _show_test_check(test: pd.Series) -> None:
+    st.subheader("Held-back check")
+    st.caption(TEST_HELP)
+    labels = {
+        "pr_auc": "PR-AUC",
+        "roc_auc": "ROC-AUC",
+        "recall_top_10": "Churners found in the riskiest 10%",
+        "brier": "Brier score (lower is better)",
+    }
+    st.dataframe(test.rename(index=labels).to_frame("chosen model"))
+
+
+def _show_drivers(drivers: pd.DataFrame, shared: int) -> None:
+    st.subheader("Top drivers")
+    st.caption(DRIVERS_HELP)
+    table = drivers[["importance_mean"]].rename(
+        columns={"importance_mean": "PR-AUC drop when shuffled"}
+    )
+    st.dataframe(table)
+    st.caption(
+        f"{shared} of the top {TOP_N} columns stayed in the top {TOP_N} for all "
+        f"{len(STABILITY_SEEDS)} different shuffles. Columns near the bottom of the "
+        "list have scores too close together for their order to be reliable."
+    )
+
+
+def _show_verdict(verdict: dict) -> None:
+    winners = [name.replace("_", " ") for name, beats in verdict.items() if beats]
+    if winners:
+        st.info(
+            f"Better than the baselines by at least {PR_AUC_MARGIN} PR-AUC: "
+            f"{', '.join(winners)}. The best of them is used for scoring."
+        )
+    else:
+        st.info(
+            f"No model beat the baselines by at least {PR_AUC_MARGIN} PR-AUC, so the "
+            "simple logistic regression is still the best choice. Smaller differences "
+            "can be noise."
+        )
 
 
 def _score_section(path: Path, file_key: tuple) -> None:

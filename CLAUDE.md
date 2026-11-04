@@ -10,7 +10,7 @@ A web app where a user uploads customer data (one row per customer) and gets bac
 who is likely to churn, why, and what retention action to take. If the file has a
 churn column, the platform trains and compares models; if not, it scores the file
 with an already-trained model. Solo portfolio project, built in small steps, paced
-for learning. A person always approves a model before it becomes champion.
+for learning. The scoring model is chosen automatically by a fixed margin rule.
 
 ## Architecture at a glance
 Two paths, three stores. Nothing below is built yet; this is the target shape.
@@ -122,8 +122,10 @@ data or models.
   fall back to a stratified random split only when it does not, and say so visibly.
 - **Judge by PR-AUC, not accuracy**, because churn is imbalanced. Also report
   ROC-AUC, recall in the top 10% of risk, and Brier score.
-- **Beat the baseline.** A model becomes champion only if it beats the majority-class
-  and logistic-regression baselines by a margin agreed beforehand.
+- **Beat the baseline.** The scoring model is chosen automatically: logistic
+  regression, unless a challenger beats the majority-class and logistic baselines by
+  a margin agreed beforehand (0.02 PR-AUC). The leaderboard and the chosen model
+  are shown on the screen.
 - **Set the decision threshold from the retention budget**, not at 0.5.
 - **Run the tests (and the evaluation, once it exists) before committing** a change
   to features, preprocessing or modelling.

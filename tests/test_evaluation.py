@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from churn_platform.baselines import build_logistic_baseline, build_majority_baseline
-from churn_platform.evaluation import cross_validate_models
+from churn_platform.evaluation import cross_validate_models, evaluate_on_test
 from churn_platform.preprocessing import build_preprocessor
 
 
@@ -97,3 +97,59 @@ def test_models_passed_in_are_left_unfitted() -> None:
     cross_validate_models(models, X, y)
 
     assert not hasattr(models["logistic"].named_steps["model"], "coef_")
+
+
+class FixedProbabilities:
+    """A stand-in fitted model that returns chosen churn probabilities."""
+
+    classes_ = np.array([0, 1])
+
+    def __init__(self, probabilities: list[float]) -> None:
+        self.probabilities = np.array(probabilities)
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        return np.column_stack([1 - self.probabilities, self.probabilities])
+
+
+def make_ten_customers(labels: list[int]) -> tuple[pd.DataFrame, pd.Series]:
+    return pd.DataFrame({"x": range(len(labels))}), pd.Series(labels)
+
+
+def test_a_perfect_ranking_scores_one_on_every_ranking_metric() -> None:
+    X, y = make_ten_customers([1, 1, 0, 0, 0, 0, 0, 0, 0, 0])
+    model = FixedProbabilities([0.9, 0.8, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+
+    scores = evaluate_on_test(model, X, y)
+
+    assert scores["pr_auc"] == pytest.approx(1.0)
+    assert scores["roc_auc"] == pytest.approx(1.0)
+    # Top 10% of 10 customers is one customer; it holds 1 of the 2 churners.
+    assert scores["recall_top_10"] == pytest.approx(0.5)
+
+
+def test_a_reversed_ranking_finds_no_churners_in_the_top_group() -> None:
+    X, y = make_ten_customers([1, 1, 0, 0, 0, 0, 0, 0, 0, 0])
+    # The two churners get the two lowest probabilities, with no ties.
+    model = FixedProbabilities([0.01, 0.02, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9])
+
+    scores = evaluate_on_test(model, X, y)
+
+    assert scores["recall_top_10"] == 0.0
+    assert scores["roc_auc"] == pytest.approx(0.0)
+
+
+def test_brier_is_zero_for_certain_correct_probabilities_and_worse_otherwise() -> None:
+    X, y = make_ten_customers([1, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+
+    sure = evaluate_on_test(FixedProbabilities([1.0] + [0.0] * 9), X, y)
+    unsure = evaluate_on_test(FixedProbabilities([0.5] * 10), X, y)
+
+    assert sure["brier"] == pytest.approx(0.0)
+    assert unsure["brier"] == pytest.approx(0.25)
+
+
+def test_a_test_set_without_churners_is_refused() -> None:
+    X, y = make_ten_customers([0] * 10)
+
+    with pytest.raises(ValueError, match="no churned customers"):
+        evaluate_on_test(FixedProbabilities([0.5] * 10), X, y)

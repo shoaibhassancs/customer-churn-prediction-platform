@@ -22,3 +22,6 @@ models/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+
+# macOS folder metadata
+.DS_Store

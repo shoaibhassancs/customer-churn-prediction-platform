@@ -41,7 +41,7 @@ def test_train_from_file_saves_a_model_that_can_be_loaded(tmp_path) -> None:
     result = train_from_file(csv, model_path)
 
     assert model_path.exists()
-    assert list(result.cv_scores.index) == ["majority", "logistic"]
+    assert len(result.cv_scores) == 4
     assert load_model(model_path).steps[-1][0] == "model"
 
 
