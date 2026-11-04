@@ -12,6 +12,9 @@ DECISIONS.md
 # Datasets (fetched or downloaded locally, never committed)
 data/
 
+# Saved trained models (generated, never committed)
+models/
+
 # Python and tool caches
 __pycache__/
 .pytest_cache/

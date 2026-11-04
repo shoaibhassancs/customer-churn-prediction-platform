@@ -50,6 +50,25 @@ def test_non_numeric_text_raises_instead_of_being_hidden() -> None:
         fix_total_charges(raw)
 
 
+def test_total_charges_already_read_as_numbers_is_accepted() -> None:
+    raw = make_raw_customers()
+    raw["TotalCharges"] = [29.85, 1889.5, 12.0]
+
+    cleaned = fix_total_charges(raw)
+
+    assert cleaned["TotalCharges"].tolist() == [29.85, 1889.5, 12.0]
+
+
+def test_empty_cells_become_zero_in_text_and_in_numeric_columns() -> None:
+    as_text = make_raw_customers()
+    as_text["TotalCharges"] = pd.Series(["29.85", None, " "], dtype="str")
+    as_numbers = make_raw_customers()
+    as_numbers["TotalCharges"] = [29.85, float("nan"), 12.0]
+
+    assert fix_total_charges(as_text)["TotalCharges"].tolist() == [29.85, 0.0, 0.0]
+    assert fix_total_charges(as_numbers)["TotalCharges"].tolist() == [29.85, 0.0, 12.0]
+
+
 def make_churn_customers(labels: list[str]) -> pd.DataFrame:
     """A small table with a text Churn column holding the given labels."""
     return pd.DataFrame(

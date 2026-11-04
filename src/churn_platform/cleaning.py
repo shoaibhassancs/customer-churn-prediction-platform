@@ -13,11 +13,18 @@ def fix_total_charges(df: pd.DataFrame) -> pd.DataFrame:
 
     In the raw file the column is text, and brand-new customers (tenure 0) have a
     blank instead of a number. They have not been billed yet, so a blank becomes 0.
-    Any other non-numeric text raises ``ValueError`` instead of being hidden.
+    Any other non-numeric text raises ``ValueError`` instead of being hidden. A column
+    that pandas already read as numbers (a file with no blank text) is accepted too,
+    and its empty cells also become 0.
     """
     # Copy first so the caller's DataFrame is never changed behind their back.
     cleaned = df.copy()
-    text = cleaned[TOTAL_CHARGES].str.strip()
+    column = cleaned[TOTAL_CHARGES]
+    if pd.api.types.is_numeric_dtype(column):
+        cleaned[TOTAL_CHARGES] = column.fillna(0.0).astype("float64")
+        return cleaned
+    # An empty cell is NaN and a blank is " "; both mean "not billed yet".
+    text = column.str.strip().fillna("")
     # Only blanks are replaced. Converting without errors="coerce" means a value like
     # "abc" fails loudly, which is what we want from a data-quality step.
     cleaned[TOTAL_CHARGES] = pd.to_numeric(text.replace("", "0"))
