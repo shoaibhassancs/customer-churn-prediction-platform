@@ -15,6 +15,9 @@ data/
 # Saved trained models (generated, never committed)
 models/
 
+# Local settings (copy of .env.example); never committed
+.env
+
 # Python and tool caches
 __pycache__/
 .pytest_cache/

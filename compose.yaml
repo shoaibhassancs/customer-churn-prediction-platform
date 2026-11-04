@@ -1,0 +1,14 @@
+# Start the app with `docker compose up --build`, then open http://localhost:8501.
+# Settings come from the environment or a `.env` file; see `.env.example`.
+services:
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-8501}:8501"
+    environment:
+      CHURN_MODEL_PATH: /data/models/baseline.joblib
+      STREAMLIT_SERVER_MAX_UPLOAD_SIZE: ${MAX_UPLOAD_MB:-200}
+    volumes:
+      # The trained model is kept on this machine, so it survives restarts.
+      - ./models:/data/models
+    restart: unless-stopped

@@ -1,0 +1,14 @@
+# Keep the build small and keep data and notes out of the image.
+.venv/
+.git/
+.vscode/
+*.code-workspace
+data/
+models/
+project-notes/
+DECISIONS.md
+tests/
+.env
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
