@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from churn_platform.drift import MIN_ROWS, DriftReport
 from churn_platform.drivers import STABILITY_SEEDS, TOP_N
@@ -21,7 +22,7 @@ from churn_platform.ingest import (
     load_csv,
     validate_upload,
 )
-from churn_platform.persistence import configured_model_path
+from churn_platform.persistence import configured_model_path, demo_mode_enabled
 from churn_platform.recommendations import ACTION_COLUMN
 from churn_platform.scoring import (
     HIGH,
@@ -31,6 +32,7 @@ from churn_platform.scoring import (
     PROBABILITY_COLUMN,
     RISK_BAND_COLUMN,
 )
+from churn_platform.synthetic import make_customers
 from churn_platform.workflow import (
     InvalidFileError,
     drift_report,
@@ -39,6 +41,13 @@ from churn_platform.workflow import (
 )
 
 PREVIEW_ROWS = 20
+SAMPLE_ROWS = 2000
+# A different seed from the demo model's training data, so the sample is new customers.
+SAMPLE_SEED = 7
+SAMPLE_NAME = "sample_customers.csv"
+SAMPLE_KEY = "use_sample"
+SESSION_FOLDER_KEY = "session_folder"
+SESSION_MODEL_KEY = "session_model"
 TOP_CUSTOMERS_SHOWN = 10
 DRIFT_HELP = (
     "**Drift check:** for each column, the spread of values in this file is compared "
@@ -88,19 +97,65 @@ def main() -> None:
         "to get churn risk scores for each customer."
     )
     uploaded = st.file_uploader("Customer file (CSV)", type="csv")
-    if uploaded is None:
+    source = _chosen_file(uploaded)
+    if source is None:
         return
-    file_key = (uploaded.name, uploaded.size)
-    # The functions read from a path, so the upload is written to a temporary folder
+    name, data = source
+    file_key = (name, len(data))
+    # The functions read from a path, so the file is written to a temporary folder
     # that is deleted when this block ends.
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / "upload.csv"
-        path.write_bytes(uploaded.getvalue())
+        path.write_bytes(data)
         _show_file(path, file_key)
 
 
+def _chosen_file(uploaded: UploadedFile | None) -> tuple[str, bytes] | None:
+    """Return the name and bytes of the file to use: the upload, or the sample.
+
+    An uploaded file always wins. The sample is made up on the spot, and the choice is
+    kept in ``session_state`` so it survives the reruns that follow every click.
+    """
+    if uploaded is not None:
+        return uploaded.name, uploaded.getvalue()
+    if st.session_state.get(SAMPLE_KEY) or st.button(
+        f"Try a sample file ({SAMPLE_ROWS:,} made-up customers)"
+    ):
+        st.session_state[SAMPLE_KEY] = True
+        st.caption(
+            f"Using a sample of {SAMPLE_ROWS:,} made-up customers. "
+            "Upload your own file above to replace it."
+        )
+        return SAMPLE_NAME, _sample_bytes()
+    return None
+
+
+def _sample_bytes() -> bytes:
+    """A CSV of made-up customers, new to the demo model."""
+    return make_customers(SAMPLE_ROWS, SAMPLE_SEED).to_csv(index=False).encode("utf-8")
+
+
 def _model_path() -> Path:
-    return configured_model_path()
+    """The model to score with: this visitor's own if they trained one, else the shared.
+
+    Only demo mode sets a private model, so a normal run always uses the shared one.
+    """
+    own = st.session_state.get(SESSION_MODEL_KEY)
+    return Path(own) if own else configured_model_path()
+
+
+def _train_target() -> Path:
+    """Where Train saves: the shared model path, or a private folder in demo mode.
+
+    In demo mode the shared model (the built-in demo model) is never overwritten, so
+    one visitor's Train cannot change what another visitor scores with. The private
+    folder lives in the system temp area and goes when the host restarts.
+    """
+    if not demo_mode_enabled():
+        return configured_model_path()
+    if SESSION_FOLDER_KEY not in st.session_state:
+        st.session_state[SESSION_FOLDER_KEY] = tempfile.mkdtemp(prefix="churn-session-")
+    return Path(st.session_state[SESSION_FOLDER_KEY]) / "model.joblib"
 
 
 def _show_file(path: Path, file_key: tuple[str, int]) -> None:
@@ -136,11 +191,14 @@ def _train_section(path: Path, file_key: tuple[str, int]) -> None:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 with st.spinner("Training and comparing four models. Please wait..."):
-                    result = train_from_file(path, _model_path())
+                    target = _train_target()
+                    result = train_from_file(path, target)
         except InvalidFileError as error:
             st.error(str(error))
             return
         notes = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
+        if demo_mode_enabled():
+            st.session_state[SESSION_MODEL_KEY] = str(target)
         st.session_state["trained"] = {
             "key": file_key,
             "chosen": result.chosen_model,
@@ -155,7 +213,7 @@ def _train_section(path: Path, file_key: tuple[str, int]) -> None:
     if trained and trained["key"] == file_key:
         st.success(
             f"Four models compared. The {trained['chosen'].replace('_', ' ')} model "
-            f"was chosen by the margin rule, saved to {_model_path()} and is used "
+            f"was chosen by the margin rule, saved {_saved_where()} and is used "
             "for scoring."
         )
         st.dataframe(trained["scores"])
@@ -165,6 +223,12 @@ def _train_section(path: Path, file_key: tuple[str, int]) -> None:
         _show_drivers(trained["drivers"], trained["shared"])
         for note in trained["notes"]:
             st.warning(note)
+
+
+def _saved_where() -> str:
+    if demo_mode_enabled():
+        return "for this browser session only"
+    return f"to {_model_path()}"
 
 
 def _show_test_check(test: pd.Series) -> None:

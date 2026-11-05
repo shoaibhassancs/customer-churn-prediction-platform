@@ -7,6 +7,7 @@ services:
       - "${APP_PORT:-8501}:8501"
     environment:
       CHURN_MODEL_PATH: /data/models/baseline.joblib
+      DEMO_MODE: ${DEMO_MODE:-0}
       STREAMLIT_SERVER_MAX_UPLOAD_SIZE: ${MAX_UPLOAD_MB:-200}
     volumes:
       # The trained model is kept on this machine, so it survives restarts.

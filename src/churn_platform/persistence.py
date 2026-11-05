@@ -14,6 +14,14 @@ MODEL_PATH_ENV = "CHURN_MODEL_PATH"
 DEFAULT_MODEL_PATH = "models/baseline.joblib"
 
 
+DEMO_MODE_ENV = "DEMO_MODE"
+
+
+def demo_mode_enabled() -> bool:
+    """True when ``DEMO_MODE`` is 1, true or yes: visitors train private models."""
+    return os.environ.get(DEMO_MODE_ENV, "").strip().lower() in ("1", "true", "yes")
+
+
 def configured_model_path() -> Path:
     """Where the saved model lives: the ``CHURN_MODEL_PATH`` setting, or the default."""
     return Path(os.environ.get(MODEL_PATH_ENV, DEFAULT_MODEL_PATH))

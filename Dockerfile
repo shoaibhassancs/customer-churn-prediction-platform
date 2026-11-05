@@ -32,8 +32,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
     CHURN_MODEL_PATH=/data/models/baseline.joblib
 
 EXPOSE 8501
+# Render tells the app which port to use through PORT; everywhere else it is 8501.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"
+    CMD python -c "import os, urllib.request as u; u.urlopen('http://localhost:%s/_stcore/health' % os.environ.get('PORT', '8501'))"
 
 # Put the demo model in place if there is no model yet, then start the app.
-CMD ["sh", "-c", "python -m churn_platform.demo restore && exec streamlit run src/churn_platform/app.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true --browser.gatherUsageStats=false"]
+CMD ["sh", "-c", "python -m churn_platform.demo restore && exec streamlit run src/churn_platform/app.py --server.address=0.0.0.0 --server.port=${PORT:-8501} --server.headless=true --browser.gatherUsageStats=false"]

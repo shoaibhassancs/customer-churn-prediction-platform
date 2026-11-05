@@ -8,6 +8,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from churn_platform.preprocessing import CATEGORICAL_COLUMNS
+from churn_platform.workflow import train_from_file
 
 # The app reads its model location from this variable; tests point it at a temp folder.
 MODEL_PATH_ENV = "CHURN_MODEL_PATH"
@@ -43,6 +44,11 @@ def upload(app: AppTest, table: pd.DataFrame | bytes) -> AppTest:
     return app.run()
 
 
+def write_upload(table: pd.DataFrame, path: Path) -> Path:
+    table.to_csv(path, index=False)
+    return path
+
+
 def button(app: AppTest, label_start: str):
     return next(b for b in app.button if b.label.startswith(label_start))
 
@@ -52,7 +58,10 @@ def test_first_screen_asks_for_a_file_and_warns_about_personal_data(app) -> None
     assert app.title[0].value == "Customer churn predictor"
     assert "personal data" in app.info[0].value
     assert len(app.file_uploader) == 1
-    assert len(app.button) == 0
+    # The only button offered before a file is chosen is the sample one.
+    assert [b.label for b in app.button] == [
+        "Try a sample file (2,000 made-up customers)"
+    ]
 
 
 def test_a_good_training_file_shows_success_and_both_buttons(app) -> None:
@@ -150,3 +159,124 @@ def test_an_unreadable_file_gets_a_plain_message_not_a_crash(app) -> None:
 
     assert not app.exception
     assert "empty" in app.error[0].value
+
+
+def test_the_sample_button_loads_a_valid_training_file(app) -> None:
+    button(app, "Try a sample file").click()
+    app.run()
+
+    assert not app.exception
+    assert any("2,000 made-up customers" in c.value for c in app.caption)
+    assert any("2,000 customers" in c.value for c in app.caption)
+    assert app.success[0].value == "No problems found in this file."
+    assert button(app, "Train a model")
+    assert button(app, "Score customers")
+
+
+def test_the_sample_stays_after_the_next_click(app) -> None:
+    button(app, "Try a sample file").click()
+    app.run()
+
+    button(app, "Score customers").click()  # a click is a rerun; the sample must stay
+    app.run()
+
+    assert not app.exception
+    assert any("no trained model yet" in w.value for w in app.warning)
+
+
+def test_training_on_the_sample_then_scoring_it_works(app, tmp_path) -> None:
+    button(app, "Try a sample file").click()
+    app.run()
+
+    button(app, "Train a model").click()
+    app.run()
+    button(app, "Score customers").click()
+    app.run()
+
+    assert not app.exception
+    assert (tmp_path / "model.joblib").exists()
+    assert any("Scored 2,000 customers" in s.value for s in app.success)
+
+
+def test_an_uploaded_file_replaces_the_sample(app) -> None:
+    button(app, "Try a sample file").click()
+    app.run()
+
+    upload(app, make_upload(n=600, churners=120))
+
+    assert not app.exception
+    assert any("600 customers" in c.value for c in app.caption)
+    assert not any("made-up customers" in c.value for c in app.caption)
+
+
+def start_app(monkeypatch, shared_model) -> AppTest:
+    """A fresh visitor session in demo mode; the shared model is at ``shared_model``."""
+    monkeypatch.setenv(MODEL_PATH_ENV, str(shared_model))
+    monkeypatch.setenv("DEMO_MODE", "1")
+    return AppTest.from_file(str(APP_FILE), default_timeout=60).run()
+
+
+def test_in_demo_mode_training_does_not_touch_the_shared_model(
+    monkeypatch, tmp_path
+) -> None:
+    shared = tmp_path / "shared" / "model.joblib"
+    visitor = start_app(monkeypatch, shared)
+    upload(visitor, make_upload())
+
+    button(visitor, "Train a model").click()
+    visitor.run()
+
+    assert not visitor.exception
+    assert not shared.exists()  # the shared (demo) model was not created or changed
+    assert any("this browser session only" in s.value for s in visitor.success)
+
+
+def test_in_demo_mode_the_visitor_scores_with_their_own_model(
+    monkeypatch, tmp_path
+) -> None:
+    visitor = start_app(monkeypatch, tmp_path / "shared" / "model.joblib")
+    upload(visitor, make_upload())
+    button(visitor, "Train a model").click()
+    visitor.run()
+
+    button(visitor, "Score customers").click()
+    visitor.run()
+
+    assert not visitor.exception
+    assert any("Scored 600 customers" in s.value for s in visitor.success)
+
+
+def test_in_demo_mode_one_visitors_model_is_invisible_to_another(
+    monkeypatch, tmp_path
+) -> None:
+    shared = tmp_path / "shared" / "model.joblib"
+    first = start_app(monkeypatch, shared)
+    upload(first, make_upload())
+    button(first, "Train a model").click()
+    first.run()
+
+    second = start_app(monkeypatch, shared)
+    upload(second, make_upload())
+    button(second, "Score customers").click()
+    second.run()
+
+    assert any("no trained model yet" in w.value for w in second.warning)
+
+
+@pytest.mark.filterwarnings("ignore:Random split")
+def test_in_demo_mode_a_visitor_without_training_uses_the_shared_model(
+    monkeypatch, tmp_path
+) -> None:
+    shared = tmp_path / "shared" / "model.joblib"
+    monkeypatch.setenv(MODEL_PATH_ENV, str(shared))
+    train_from_file(write_upload(make_upload(), tmp_path / "t.csv"), shared)
+    visitor = start_app(monkeypatch, shared)
+    upload(visitor, make_upload().drop(columns="Churn"))
+    before = shared.read_bytes()
+
+    button(visitor, "Score customers").click()
+    visitor.run()
+
+    assert not visitor.exception
+    assert any("Scored 600 customers" in s.value for s in visitor.success)
+    assert shared.read_bytes() == before

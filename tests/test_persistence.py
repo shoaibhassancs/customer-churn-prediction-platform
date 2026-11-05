@@ -6,7 +6,12 @@ import pandas as pd
 import pytest
 
 from churn_platform.baselines import build_logistic_baseline
-from churn_platform.persistence import load_model, save_model
+from churn_platform.persistence import (
+    DEMO_MODE_ENV,
+    demo_mode_enabled,
+    load_model,
+    save_model,
+)
 from churn_platform.preprocessing import build_preprocessor
 from churn_platform.scoring import score_customers
 
@@ -83,3 +88,23 @@ def test_loading_something_that_is_not_a_pipeline_is_refused(tmp_path) -> None:
 
     with pytest.raises(TypeError, match="dict"):
         load_model(path)
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", " yes "])
+def test_demo_mode_is_on_for_the_accepted_values(monkeypatch, value) -> None:
+    monkeypatch.setenv(DEMO_MODE_ENV, value)
+
+    assert demo_mode_enabled()
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no", "banana"])
+def test_demo_mode_is_off_for_everything_else(monkeypatch, value) -> None:
+    monkeypatch.setenv(DEMO_MODE_ENV, value)
+
+    assert not demo_mode_enabled()
+
+
+def test_demo_mode_is_off_when_the_setting_is_missing(monkeypatch) -> None:
+    monkeypatch.delenv(DEMO_MODE_ENV, raising=False)
+
+    assert not demo_mode_enabled()
