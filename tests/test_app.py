@@ -216,6 +216,23 @@ def start_app(monkeypatch, shared_model) -> AppTest:
     return AppTest.from_file(str(APP_FILE), default_timeout=60).run()
 
 
+def test_in_demo_mode_the_screen_warns_that_training_is_slow(
+    monkeypatch, tmp_path
+) -> None:
+    visitor = start_app(monkeypatch, tmp_path / "shared" / "model.joblib")
+    upload(visitor, make_upload())
+
+    assert not visitor.exception
+    assert any("about 5 minutes" in c.value for c in visitor.caption)
+
+
+def test_outside_demo_mode_there_is_no_slow_training_warning(app) -> None:
+    upload(app, make_upload())
+
+    assert not app.exception
+    assert not any("about 5 minutes" in c.value for c in app.caption)
+
+
 def test_in_demo_mode_training_does_not_touch_the_shared_model(
     monkeypatch, tmp_path
 ) -> None:

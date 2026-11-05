@@ -185,6 +185,11 @@ def _show_report(report: ValidationReport) -> None:
 
 def _train_section(path: Path, file_key: tuple[str, int]) -> None:
     st.subheader("Train and compare models")
+    if demo_mode_enabled():
+        st.caption(
+            "This demo runs on a free server, so training can take about 5 minutes. "
+            "Scoring is instant, so you can try Score first."
+        )
     if st.button("Train a model on this file"):
         try:
             # Record warnings so the "random split" notice is visible on the screen.
