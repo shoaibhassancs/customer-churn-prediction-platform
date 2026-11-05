@@ -4,10 +4,19 @@ Only load files this project saved itself. Loading a joblib file runs code from 
 a file from an untrusted source (such as a user upload) must never be loaded.
 """
 
+import os
 from pathlib import Path
 
 import joblib
 from sklearn.pipeline import Pipeline
+
+MODEL_PATH_ENV = "CHURN_MODEL_PATH"
+DEFAULT_MODEL_PATH = "models/baseline.joblib"
+
+
+def configured_model_path() -> Path:
+    """Where the saved model lives: the ``CHURN_MODEL_PATH`` setting, or the default."""
+    return Path(os.environ.get(MODEL_PATH_ENV, DEFAULT_MODEL_PATH))
 
 
 def save_model(pipeline: Pipeline, path: Path) -> Path:

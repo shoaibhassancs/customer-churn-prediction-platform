@@ -4,7 +4,6 @@ Run it from the project root with ``uv run streamlit run src/churn_platform/app.
 The screen only calls the tested functions in ``ingest`` and ``workflow``.
 """
 
-import os
 import tempfile
 import warnings
 from pathlib import Path
@@ -22,6 +21,7 @@ from churn_platform.ingest import (
     load_csv,
     validate_upload,
 )
+from churn_platform.persistence import configured_model_path
 from churn_platform.recommendations import ACTION_COLUMN
 from churn_platform.scoring import (
     HIGH,
@@ -38,8 +38,6 @@ from churn_platform.workflow import (
     train_from_file,
 )
 
-MODEL_PATH_ENV = "CHURN_MODEL_PATH"
-DEFAULT_MODEL_PATH = "models/baseline.joblib"
 PREVIEW_ROWS = 20
 TOP_CUSTOMERS_SHOWN = 10
 DRIFT_HELP = (
@@ -102,7 +100,7 @@ def main() -> None:
 
 
 def _model_path() -> Path:
-    return Path(os.environ.get(MODEL_PATH_ENV, DEFAULT_MODEL_PATH))
+    return configured_model_path()
 
 
 def _show_file(path: Path, file_key: tuple[str, int]) -> None:

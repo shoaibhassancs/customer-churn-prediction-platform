@@ -19,6 +19,11 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
+# A demo model trained on made-up customers, so a host that wipes its disk on
+# restart still starts with a working model. Copied into place at start-up.
+ENV CHURN_DEMO_MODEL_PATH=/app/demo-model/baseline.joblib
+RUN /app/.venv/bin/python -m churn_platform.demo build
+
 # Run as a normal user, not root. /data/models is where the saved model lives.
 RUN useradd --create-home app && mkdir -p /data/models && chown app /data/models
 USER app
@@ -30,6 +35,5 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"
 
-CMD ["streamlit", "run", "src/churn_platform/app.py", \
-     "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true", \
-     "--browser.gatherUsageStats=false"]
+# Put the demo model in place if there is no model yet, then start the app.
+CMD ["sh", "-c", "python -m churn_platform.demo restore && exec streamlit run src/churn_platform/app.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true --browser.gatherUsageStats=false"]
