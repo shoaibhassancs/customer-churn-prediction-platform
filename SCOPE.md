@@ -22,7 +22,7 @@ regression, unless a challenger beats both baselines by an agreed margin.
 - Global ranking of the columns that drive churn
 - Rule-based retention actions with a stated reason for every High-risk customer
 - Downloadable scored file (ID, probability, risk band, action, reason)
-- Containerized app, automated checks in CI, a drift alert, and one simple login
+- Containerized app, automated checks in CI, and a drift alert
 - A live demo with sample data, a README and a model card
 
 ## Deferred (not needed for v1; can be brought back later)
@@ -37,10 +37,13 @@ reopened.
 - Single-customer form
 - Per-customer explanations and top-three drivers per customer in the scored file
 - Ranking actions by expected value (needs assumed offer cost and success rate)
+- Login: replaced by demo guardrails (a low upload limit, the privacy banner and a
+  demo model that is ready at start-up), decided at the hosting step in Phase 6.
+  A shared password is only worth adding if the link goes to chosen people
 
 ## Out of Scope
 - Real customer data or real personal information
-- Multi-tenant accounts, billing or user management beyond one simple login
+- Multi-tenant accounts, billing or any user management
 - Database or CRM connectors (file upload only)
 - Uplift modelling (needs campaign outcome data that does not exist yet)
 - Streaming or real-time ingestion

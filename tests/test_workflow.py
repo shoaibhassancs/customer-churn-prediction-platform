@@ -4,10 +4,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from churn_platform.drift import reference_path
 from churn_platform.ingest import UploadError
 from churn_platform.persistence import load_model
 from churn_platform.preprocessing import CATEGORICAL_COLUMNS
-from churn_platform.workflow import InvalidFileError, score_file, train_from_file
+from churn_platform.workflow import (
+    InvalidFileError,
+    drift_report,
+    score_file,
+    train_from_file,
+)
 
 # The random-split warning is tested in test_splitting; here it would only add noise.
 pytestmark = pytest.mark.filterwarnings("ignore:Random split")
@@ -128,3 +134,44 @@ def test_scoring_a_file_that_fails_the_checks_writes_nothing(tmp_path) -> None:
 def test_an_unreadable_file_is_reported_as_an_upload_error(tmp_path) -> None:
     with pytest.raises(UploadError, match="could not find"):
         train_from_file(tmp_path / "missing.csv", tmp_path / "baseline.joblib")
+
+
+def test_training_saves_a_reference_next_to_the_model(tmp_path) -> None:
+    model_path = tmp_path / "baseline.joblib"
+
+    train_from_file(write_csv(make_upload(), tmp_path / "train.csv"), model_path)
+
+    assert reference_path(model_path).exists()
+
+
+def test_a_file_like_the_training_data_shows_no_drift(tmp_path) -> None:
+    model_path = tmp_path / "baseline.joblib"
+    csv = write_csv(make_upload(), tmp_path / "train.csv")
+    train_from_file(csv, model_path)
+
+    report = drift_report(csv, model_path)
+
+    assert report is not None
+    assert report.reliable
+    assert report.flagged().empty
+
+
+def test_a_file_with_a_different_tenure_spread_is_flagged(tmp_path) -> None:
+    model_path = tmp_path / "baseline.joblib"
+    train_from_file(write_csv(make_upload(), tmp_path / "train.csv"), model_path)
+    shifted = make_upload().drop(columns="Churn").assign(tenure=1)
+    csv = write_csv(shifted, tmp_path / "shifted.csv")
+
+    report = drift_report(csv, model_path)
+
+    assert report is not None
+    assert "tenure" in report.flagged().index
+
+
+def test_a_model_without_a_reference_file_is_not_checked(tmp_path) -> None:
+    model_path = tmp_path / "baseline.joblib"
+    csv = write_csv(make_upload(), tmp_path / "train.csv")
+    train_from_file(csv, model_path)
+    reference_path(model_path).unlink()
+
+    assert drift_report(csv, model_path) is None

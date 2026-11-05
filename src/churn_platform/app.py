@@ -12,6 +12,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from churn_platform.drift import MIN_ROWS, DriftReport
 from churn_platform.drivers import STABILITY_SEEDS, TOP_N
 from churn_platform.evaluation import PR_AUC_MARGIN
 from churn_platform.ingest import (
@@ -30,12 +31,24 @@ from churn_platform.scoring import (
     PROBABILITY_COLUMN,
     RISK_BAND_COLUMN,
 )
-from churn_platform.workflow import InvalidFileError, score_file, train_from_file
+from churn_platform.workflow import (
+    InvalidFileError,
+    drift_report,
+    score_file,
+    train_from_file,
+)
 
 MODEL_PATH_ENV = "CHURN_MODEL_PATH"
 DEFAULT_MODEL_PATH = "models/baseline.joblib"
 PREVIEW_ROWS = 20
 TOP_CUSTOMERS_SHOWN = 10
+DRIFT_HELP = (
+    "**Drift check:** for each column, the spread of values in this file is compared "
+    "with the spread in the data the model learned from. The shift is shown as PSI "
+    "(population stability index): below 0.1 is small, 0.1 to 0.25 is moderate and "
+    "above 0.25 is large. These cutoffs are common rules of thumb, not tuned to this "
+    "data."
+)
 ACTIONS_HELP = (
     "These actions come from simple rules, checked from the most specific to the "
     "least: the first rule that fits a customer decides. They are suggestions, not "
@@ -224,10 +237,40 @@ def _score_section(path: Path, file_key: tuple[str, int]) -> None:
             "key": file_key,
             "table": scored,
             "percent": percent,
+            "drift": drift_report(path, _model_path()),
         }
     scored_state = st.session_state.get("scored")
     if scored_state and scored_state["key"] == file_key:
+        _show_drift(scored_state["drift"])
         _show_scores(scored_state["table"], scored_state["percent"])
+
+
+def _show_drift(drift: DriftReport | None) -> None:
+    if drift is None:
+        st.caption(
+            "No drift check: this model was saved without a reference, so the file "
+            "cannot be compared with the training data. Train again to switch it on."
+        )
+        return
+    if not drift.reliable:
+        st.caption(
+            f"The file has only {drift.rows:,} rows, too few for a reliable drift "
+            f"check (at least {MIN_ROWS})."
+        )
+        return
+    flagged = drift.flagged()
+    if flagged.empty:
+        st.success(
+            "No drift found: the columns in this file are spread like the data the "
+            "model learned from."
+        )
+        return
+    st.warning(
+        f"{len(flagged)} column(s) look different from the data the model learned "
+        "from, so the scores for this file may be less reliable."
+    )
+    st.dataframe(flagged.assign(psi=flagged["psi"].round(3)))
+    st.caption(DRIFT_HELP)
 
 
 def _show_actions(scored: pd.DataFrame) -> None:

@@ -105,6 +105,20 @@ def test_drivers_rank_the_model_input_columns_and_count_the_stable_ones() -> Non
     assert 0 <= result.shared_drivers <= 10
 
 
+def test_the_result_carries_a_drift_reference_for_the_model_input_columns() -> None:
+    result = train_baseline(make_raw_customers(), make_small_preprocessor())
+
+    assert set(result.drift_reference) == {
+        "Contract",
+        "tenure",
+        "TotalCharges",
+        "Partner",
+        "Dependents",
+        "PhoneService",
+        "PaperlessBilling",
+    }
+
+
 def test_the_fitted_model_is_the_one_the_result_names() -> None:
     result = train_baseline(make_raw_customers(), make_small_preprocessor())
 

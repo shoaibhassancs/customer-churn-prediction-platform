@@ -101,6 +101,7 @@ def test_scoring_after_training_shows_a_preview_and_a_download(app) -> None:
 
     assert not app.exception
     assert any("Scored 600 customers" in s.value for s in app.success)
+    assert any("No drift found" in s.value for s in app.success)
     preview = next(d.value for d in app.dataframe if len(d.value) == 20)
     assert preview.columns.tolist() == [
         "customerID",

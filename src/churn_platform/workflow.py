@@ -4,6 +4,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from churn_platform.drift import (
+    DriftReport,
+    check_drift,
+    load_reference,
+    save_reference,
+)
 from churn_platform.ingest import (
     TRAIN_MODE,
     Issue,
@@ -47,6 +53,7 @@ def train_from_file(csv_path: Path, model_path: Path) -> TrainingResult:
     _require_valid(report)
     result = train_baseline(table)
     save_model(result.pipeline, model_path)
+    save_reference(result.drift_reference, model_path)
     return result
 
 
@@ -72,6 +79,19 @@ def score_file(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     scored.to_csv(output_path, index=False)
     return scored
+
+
+def drift_report(csv_path: Path, model_path: Path) -> DriftReport | None:
+    """Compare a CSV with the data the saved model learned from.
+
+    Returns None when the model has no saved reference (it was saved before this check
+    existed), so there is nothing to compare with. Raises ``UploadError`` if the file
+    cannot be read.
+    """
+    reference = load_reference(model_path)
+    if reference is None:
+        return None
+    return check_drift(reference, load_csv(csv_path))
 
 
 def _require_valid(report: ValidationReport) -> None:

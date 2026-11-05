@@ -1,12 +1,14 @@
 """The training path: from a raw labelled table to the fitted scoring model."""
 
 from dataclasses import dataclass
+from typing import Any
 
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
 from churn_platform.cleaning import encode_churn
+from churn_platform.drift import build_reference
 from churn_platform.drivers import TOP_N, stable_top_drivers
 from churn_platform.evaluation import (
     choose_scoring_model,
@@ -28,7 +30,9 @@ class TrainingResult:
     baselines by the agreed margin. ``test_scores`` is the one-time check of the
     chosen model on the held-back rows. ``drivers`` ranks the columns the model relies
     on, and ``shared_drivers`` counts how many of the top ten hold for three different
-    shuffles. ``X_test`` and ``y_test`` are
+    shuffles. ``drift_reference`` describes how each input column was spread across the
+    training rows, for the drift check when new files are scored. ``X_test`` and
+    ``y_test`` are
     the held-back rows, kept here so the final check can use them later without having
     to split the data again.
     """
@@ -40,6 +44,7 @@ class TrainingResult:
     test_scores: pd.Series
     drivers: pd.DataFrame
     shared_drivers: int
+    drift_reference: dict[str, Any]
     X_test: pd.DataFrame
     y_test: pd.Series
 
@@ -70,6 +75,7 @@ def train_baseline(
         test_scores=evaluate_on_test(pipeline, X_test, y_test),
         drivers=drivers,
         shared_drivers=shared_drivers,
+        drift_reference=build_reference(pipeline, X_train),
         X_test=X_test,
         y_test=y_test,
     )
