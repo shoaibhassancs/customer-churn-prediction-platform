@@ -1,0 +1,39 @@
+# Runs the same checks as the commit hook, plus the tests, on a clean machine.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# The job only reads the code, so it gets read-only access.
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    # Stops a stuck run from using up the free minutes of a private repo.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          # Same uv version as the Dockerfile and the build backend.
+          version: "0.13.6"
+          enable-cache: true
+
+      # --locked fails if uv.lock is out of date with pyproject.toml.
+      - name: Install the pinned dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Check formatting
+        run: uv run ruff format --check src tests
+
+      - name: Tests
+        run: uv run pytest -q
