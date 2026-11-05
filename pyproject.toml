@@ -21,6 +21,7 @@ module-name = "churn_platform"
 [dependency-groups]
 dev = [
     "ipykernel>=7.4.0",
+    "mypy>=2.4.1",
     "pre-commit>=4.7.0",
     "pytest>=9.2.0",
     "ruff>=0.17.3",
@@ -36,3 +37,9 @@ select = ["E", "W", "F", "I", "N"]
 # A capital X for the feature table (and lowercase y for the target) is the standard
 # scikit-learn convention, so the PEP 8 lowercase-name rules are switched off for it.
 ignore = ["N803", "N806"]
+
+[tool.mypy]
+files = ["src"]
+python_version = "3.12"
+# scikit-learn and joblib ship no type information, so their imports count as untyped.
+ignore_missing_imports = true

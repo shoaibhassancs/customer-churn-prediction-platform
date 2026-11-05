@@ -4,6 +4,7 @@ The checks cover what the rest of the code relies on. Each problem comes with a
 suggested fix as text; nothing in the uploaded data is changed.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -136,7 +137,7 @@ def validate_upload(
     return ValidationReport(mode, tuple(errors), tuple(warnings))
 
 
-def _examples(values: list) -> str:
+def _examples(values: Sequence[object]) -> str:
     """Show up to five values as text, for use inside a message."""
     shown = ", ".join(repr(v) for v in values[:5])
     return shown + (", ..." if len(values) > 5 else "")

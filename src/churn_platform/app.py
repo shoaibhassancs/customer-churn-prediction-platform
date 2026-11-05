@@ -92,7 +92,7 @@ def _model_path() -> Path:
     return Path(os.environ.get(MODEL_PATH_ENV, DEFAULT_MODEL_PATH))
 
 
-def _show_file(path: Path, file_key: tuple) -> None:
+def _show_file(path: Path, file_key: tuple[str, int]) -> None:
     try:
         table = load_csv(path)
     except UploadError as error:
@@ -117,7 +117,7 @@ def _show_report(report: ValidationReport) -> None:
         st.success("No problems found in this file.")
 
 
-def _train_section(path: Path, file_key: tuple) -> None:
+def _train_section(path: Path, file_key: tuple[str, int]) -> None:
     st.subheader("Train and compare models")
     if st.button("Train a model on this file"):
         try:
@@ -182,7 +182,7 @@ def _show_drivers(drivers: pd.DataFrame, shared: int) -> None:
     )
 
 
-def _show_verdict(verdict: dict) -> None:
+def _show_verdict(verdict: dict[str, bool]) -> None:
     winners = [name.replace("_", " ") for name, beats in verdict.items() if beats]
     if winners:
         st.info(
@@ -197,7 +197,7 @@ def _show_verdict(verdict: dict) -> None:
         )
 
 
-def _score_section(path: Path, file_key: tuple) -> None:
+def _score_section(path: Path, file_key: tuple[str, int]) -> None:
     st.subheader("Score customers")
     percent = st.number_input(
         "Share of customers you can contact (%)",

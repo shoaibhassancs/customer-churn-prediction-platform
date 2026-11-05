@@ -60,12 +60,13 @@ uv run python -m churn_platform.<module>   # run a module from the package
 uv run pytest                # run the tests in tests/
 uv run ruff check src tests          # lint (PEP 8, unused code, imports, naming)
 uv run ruff format --check src tests   # check layout (drop --check to rewrite)
+uv run mypy                            # type check src/ (runs in CI, not in the hook)
 uv run pre-commit run --all-files      # run the commit checks by hand
 uv run pre-commit install    # once: make git run those checks before every commit
 ```
 Always go through `uv run` (or the activated `.venv`) so the pinned environment is
 used. Runtime packages are listed in `pyproject.toml`; dev-only: pytest, ipykernel,
-ruff and pre-commit. Add new commands here as they start to work; do not list ones
+ruff, mypy and pre-commit. Add new commands here as they start to work; do not list ones
 that do not work yet.
 
 ## How we work (read before changing anything)
