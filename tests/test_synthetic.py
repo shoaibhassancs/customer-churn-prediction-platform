@@ -55,9 +55,10 @@ def test_planted_drivers_show_up_in_the_churn_rates() -> None:
     by_contract = table.groupby("Contract").apply(churn_rate, include_groups=False)
     assert by_contract["Month-to-month"] > by_contract["One year"] + 0.2
     assert by_contract["One year"] > by_contract["Two year"]
-    assert churn_rate(table[table["tenure"] < 12]) > churn_rate(
-        table[table["tenure"] > 48]
-    ) + 0.3
+    assert (
+        churn_rate(table[table["tenure"] < 12])
+        > churn_rate(table[table["tenure"] > 48]) + 0.3
+    )
     by_payment = table.groupby("PaymentMethod").apply(churn_rate, include_groups=False)
     assert by_payment["Electronic check"] > by_payment["Mailed check"]
 

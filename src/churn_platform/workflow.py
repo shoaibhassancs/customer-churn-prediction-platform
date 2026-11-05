@@ -12,7 +12,7 @@ from churn_platform.ingest import (
     validate_upload,
 )
 from churn_platform.persistence import load_model, save_model
-from churn_platform.scoring import score_customers
+from churn_platform.scoring import HIGH_SHARE, score_customers
 from churn_platform.training import TrainingResult, train_baseline
 
 
@@ -50,17 +50,24 @@ def train_from_file(csv_path: Path, model_path: Path) -> TrainingResult:
     return result
 
 
-def score_file(csv_path: Path, model_path: Path, output_path: Path) -> pd.DataFrame:
+def score_file(
+    csv_path: Path,
+    model_path: Path,
+    output_path: Path,
+    high_share: float = HIGH_SHARE,
+) -> pd.DataFrame:
     """Score every customer in a CSV with a saved model and write the result as a CSV.
 
-    The output has one row per customer: ``customerID`` and ``churn_probability``.
+    The output has one row per customer: ``customerID``, ``churn_probability`` and
+    ``risk_band`` (the riskiest ``high_share`` of customers are High), and, for High
+    customers, ``recommended_action`` and ``reason``.
     Raises ``UploadError`` if the file cannot be read, ``InvalidFileError`` if it fails
     the checks, and ``FileNotFoundError`` if there is no saved model. Nothing is
     written then.
     """
     table = load_csv(csv_path)
     _require_valid(validate_upload(table))
-    scored = score_customers(load_model(model_path), table)
+    scored = score_customers(load_model(model_path), table, high_share=high_share)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     scored.to_csv(output_path, index=False)

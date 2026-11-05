@@ -21,5 +21,18 @@ module-name = "churn_platform"
 [dependency-groups]
 dev = [
     "ipykernel>=7.4.0",
+    "pre-commit>=4.7.0",
     "pytest>=9.2.0",
+    "ruff>=0.17.3",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/W: PEP 8 style, F: unused or undefined names, I: import order, N: PEP 8 naming.
+select = ["E", "W", "F", "I", "N"]
+# A capital X for the feature table (and lowercase y for the target) is the standard
+# scikit-learn convention, so the PEP 8 lowercase-name rules are switched off for it.
+ignore = ["N803", "N806"]

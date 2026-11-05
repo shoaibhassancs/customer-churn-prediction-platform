@@ -101,8 +101,16 @@ def test_scoring_after_training_shows_a_preview_and_a_download(app) -> None:
 
     assert not app.exception
     assert any("Scored 600 customers" in s.value for s in app.success)
-    preview = app.dataframe[-1].value
-    assert preview.columns.tolist() == ["customerID", "churn_probability"]
+    preview = next(d.value for d in app.dataframe if len(d.value) == 20)
+    assert preview.columns.tolist() == [
+        "customerID",
+        "churn_probability",
+        "risk_band",
+        "recommended_action",
+        "reason",
+    ]
+    assert any("High risk:" in m.value for m in app.markdown)
+    assert any("have a recommended action" in m.value for m in app.markdown)
     assert len(preview) == 20
 
 

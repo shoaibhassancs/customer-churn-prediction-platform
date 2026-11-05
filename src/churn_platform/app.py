@@ -21,11 +21,26 @@ from churn_platform.ingest import (
     load_csv,
     validate_upload,
 )
+from churn_platform.recommendations import ACTION_COLUMN
+from churn_platform.scoring import (
+    HIGH,
+    HIGH_SHARE,
+    LOW,
+    MEDIUM,
+    PROBABILITY_COLUMN,
+    RISK_BAND_COLUMN,
+)
 from churn_platform.workflow import InvalidFileError, score_file, train_from_file
 
 MODEL_PATH_ENV = "CHURN_MODEL_PATH"
 DEFAULT_MODEL_PATH = "models/baseline.joblib"
 PREVIEW_ROWS = 20
+TOP_CUSTOMERS_SHOWN = 10
+ACTIONS_HELP = (
+    "These actions come from simple rules, checked from the most specific to the "
+    "least: the first rule that fits a customer decides. They are suggestions, not "
+    "proof that an action keeps customers. Testing that needs real campaign results."
+)
 METRIC_HELP = (
     "PR-AUC: Measures how well the model ranks customers who leave above those "
     "who stay. A guessing model scores about the same as the churn rate.\n\n"
@@ -184,9 +199,18 @@ def _show_verdict(verdict: dict) -> None:
 
 def _score_section(path: Path, file_key: tuple) -> None:
     st.subheader("Score customers")
+    percent = st.number_input(
+        "Share of customers you can contact (%)",
+        min_value=1,
+        max_value=50,
+        value=int(HIGH_SHARE * 100),
+        help="The riskiest customers up to this share are marked High risk.",
+    )
     if st.button("Score customers in this file"):
         try:
-            scored = score_file(path, _model_path(), path.with_name("scores.csv"))
+            scored = score_file(
+                path, _model_path(), path.with_name("scores.csv"), percent / 100
+            )
         except FileNotFoundError:
             st.warning(
                 "There is no trained model yet. Upload a file that has a Churn "
@@ -196,19 +220,44 @@ def _score_section(path: Path, file_key: tuple) -> None:
         except InvalidFileError as error:
             st.error(str(error))
             return
-        st.session_state["scored"] = {"key": file_key, "table": scored}
+        st.session_state["scored"] = {
+            "key": file_key,
+            "table": scored,
+            "percent": percent,
+        }
     scored_state = st.session_state.get("scored")
     if scored_state and scored_state["key"] == file_key:
-        _show_scores(scored_state["table"])
+        _show_scores(scored_state["table"], scored_state["percent"])
 
 
-def _show_scores(scored: pd.DataFrame) -> None:
+def _show_actions(scored: pd.DataFrame) -> None:
+    high = scored[scored[RISK_BAND_COLUMN] == HIGH]
+    st.subheader("Recommended actions for High-risk customers")
+    st.write(
+        f"{(high[ACTION_COLUMN] != '').sum():,} of {len(high):,} High-risk customers "
+        "have a recommended action."
+    )
+    st.dataframe(high[ACTION_COLUMN].value_counts().rename("customers"))
+    riskiest = high.sort_values(PROBABILITY_COLUMN, ascending=False)
+    st.caption("The riskiest customers and why each action was suggested:")
+    st.dataframe(riskiest.head(TOP_CUSTOMERS_SHOWN))
+    st.caption(ACTIONS_HELP)
+
+
+def _show_scores(scored: pd.DataFrame, percent: int) -> None:
     st.success(f"Scored {len(scored):,} customers.")
+    counts = scored[RISK_BAND_COLUMN].value_counts()
+    st.write(
+        f"**High risk:** {counts.get(HIGH, 0):,} customers (the riskiest {percent}%). "
+        f"**Medium:** {counts.get(MEDIUM, 0):,}. **Low:** {counts.get(LOW, 0):,}."
+    )
     st.caption(
         "Probabilities rank customers correctly but run higher than the real chance "
-        "of leaving, until they are calibrated."
+        "of leaving, until they are calibrated. Risk bands use the ranking only, so "
+        "every file gets a High group, even if few customers in it are likely to leave."
     )
     st.dataframe(scored.head(PREVIEW_ROWS))
+    _show_actions(scored)
     st.download_button(
         "Download scored customers (CSV)",
         data=scored.to_csv(index=False).encode("utf-8"),

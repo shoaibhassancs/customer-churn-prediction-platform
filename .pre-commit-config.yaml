@@ -1,0 +1,16 @@
+# Runs before each commit once you have run `uv run pre-commit install`.
+# Both hooks call the ruff pinned in uv.lock, so there is only one ruff version.
+# Tests are not run here: they take about 100 seconds, too slow for every commit.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format --check
+        entry: uv run ruff format --check
+        language: system
+        types: [python]

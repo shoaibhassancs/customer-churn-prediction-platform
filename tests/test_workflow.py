@@ -77,11 +77,30 @@ def test_score_file_writes_one_row_per_customer(tmp_path) -> None:
 
     returned = score_file(csv, model_path, output)
 
-    written = pd.read_csv(output)
-    assert written.columns.tolist() == ["customerID", "churn_probability"]
+    # Blank cells are empty text for customers with no action, not missing values.
+    written = pd.read_csv(output, keep_default_na=False)
+    assert written.columns.tolist() == [
+        "customerID",
+        "churn_probability",
+        "risk_band",
+        "recommended_action",
+        "reason",
+    ]
     assert written["customerID"].tolist() == new_customers["customerID"].tolist()
     assert written["churn_probability"].between(0, 1).all()
     pd.testing.assert_frame_equal(returned, written)
+
+
+def test_score_file_marks_the_riskiest_share_as_high(tmp_path) -> None:
+    model_path = tmp_path / "baseline.joblib"
+    train_from_file(write_csv(make_upload(), tmp_path / "train.csv"), model_path)
+    new_customers = make_upload(n=50, churners=10, first_id=9000).drop(columns="Churn")
+    csv = write_csv(new_customers, tmp_path / "new.csv")
+
+    scored = score_file(csv, model_path, tmp_path / "scores.csv", high_share=0.30)
+
+    assert (scored["risk_band"] == "High").sum() == 15  # 30% of 50
+    assert (scored["risk_band"] == "Medium").sum() == 10  # next 20%
 
 
 def test_scoring_without_a_saved_model_stops_before_writing(tmp_path) -> None:

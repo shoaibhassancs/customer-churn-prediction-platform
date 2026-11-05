@@ -58,11 +58,15 @@ uv add <package>             # add a dependency (updates pyproject.toml and uv.l
 uv run python <file>         # run a script inside the pinned environment
 uv run python -m churn_platform.<module>   # run a module from the package
 uv run pytest                # run the tests in tests/
+uv run ruff check src tests          # lint (PEP 8, unused code, imports, naming)
+uv run ruff format --check src tests   # check layout (drop --check to rewrite)
+uv run pre-commit run --all-files      # run the commit checks by hand
+uv run pre-commit install    # once: make git run those checks before every commit
 ```
 Always go through `uv run` (or the activated `.venv`) so the pinned environment is
-used. Installed so far: pandas and scikit-learn; dev-only: pytest and ipykernel.
-Add new commands here as they start to work (ruff); do not list ones that do not
-work yet.
+used. Runtime packages are listed in `pyproject.toml`; dev-only: pytest, ipykernel,
+ruff and pre-commit. Add new commands here as they start to work; do not list ones
+that do not work yet.
 
 ## How we work (read before changing anything)
 - **The user drives, Claude advises.** One small step at a time, then stop and wait.
@@ -103,6 +107,8 @@ work yet.
 ## Code conventions
 - PEP 8: `snake_case` for functions, variables, modules and files; `PascalCase` for
   classes; `UPPER_SNAKE_CASE` for constants; leading underscore for private helpers.
+  One deliberate exception: `X`, `X_train`, `X_test` (capital X for the feature table)
+  follow the scikit-learn convention, so ruff's N803/N806 are switched off.
 - Lines up to 88 characters. Type hints and docstrings on public functions.
 - Small, single-purpose functions. Comment the why, not the what.
 - Every function in `src/` gets a test, written as it is built. pytest is added
