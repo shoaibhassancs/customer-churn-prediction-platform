@@ -25,3 +25,7 @@ __pycache__/
 
 # macOS folder metadata
 .DS_Store
+
+# Local coding-assistant tooling and settings
+.agents/
+.claude/

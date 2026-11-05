@@ -1,4 +1,4 @@
-"""Tests for churn_platform.models and the champion margin in evaluation."""
+"""Tests for churn_platform.models and the margin rule in evaluation."""
 
 import numpy as np
 import pandas as pd

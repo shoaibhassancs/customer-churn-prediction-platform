@@ -6,43 +6,64 @@ session. Edit it in place so it never contains history.
 # Customer Churn Prediction Platform
 
 ## What this project is
-A web app where a user uploads customer data (one row per customer) and gets back
-who is likely to churn, why, and what retention action to take. If the file has a
-churn column, the platform trains and compares models; if not, it scores the file
-with an already-trained model. Solo portfolio project, built in small steps, paced
-for learning. The scoring model is chosen automatically by a fixed margin rule.
+A web app where a user uploads a CSV of customers (one row per customer, with the
+Telco column names) and gets back each customer's churn probability and risk band,
+and a rule-based retention action with a reason for the riskiest ones. If the file
+has a `Churn` column, the app trains and compares four models and picks the scoring
+model by a fixed margin rule; if not, it scores the file with the saved model. It
+also ranks the columns that drive churn and warns when a scored file looks different
+from the data the model learned from. Solo portfolio project, built in small steps,
+paced for learning.
 
 ## Architecture at a glance
-Two paths, three stores. Nothing below is built yet; this is the target shape.
-1. **Training path (background job):** ingest and validate → clean → engineer
-   features → train and tune several models → compare → register one champion.
-2. **Serving path (on request):** load the champion → score → explain → recommend.
-3. **Stores:** SQLite (metadata, predictions), local disk (raw files, model files),
-   MLflow (runs and the champion model).
+One Streamlit process (`src/churn_platform/app.py`): no API, no database, local disk
+only. The screen only calls the tested functions in `workflow.py`.
+1. **Train:** upload → validate (`ingest`) → clean → stratified split → cross-validate
+   four models → margin rule picks the scoring model → one check on the held-back
+   rows → rank drivers → save the model and its drift reference to `models/`.
+2. **Score:** upload → validate → load the saved model → probabilities → risk bands
+   → actions → drift check → preview and download.
+3. **Demo mode** (`DEMO_MODE=1`, used on Render): each visitor's trained model is
+   private to their session, and a model trained on made-up data (built into the
+   Docker image) is the fallback, so the shared model is never overwritten.
+4. **Delivery:** Docker image, `compose.yaml` locally, `render.yaml` for Render, CI in
+   `.github/workflows/ci.yml` (ruff, format check, mypy, pytest).
 
-Full detail lives in `project-notes/PLAN.md` and `GUIDE.md` (git-ignored, so they
-exist only on the author's machine).
+Planning notes live in `project-notes/` (git-ignored, so only on the author's machine).
 
 ## Project layout
-The project is meant to use a `src` layout: all application code in an importable
-package under `src/`, with tests outside it mirroring its structure. Items marked
-(planned) do not exist yet; update this section as they are created.
+`src` layout: all application code in an importable package under `src/`, with tests
+outside it mirroring its structure.
 
 ```
 customer-churn-prediction-platform/
-├── project-notes/        planning notes (PLAN.md, GUIDE.md), git-ignored
-├── src/
-│   └── churn_platform/   application package (all importable code)
-│       ├── cleaning.py       1. fixed rules: TotalCharges, yes/no flags, Churn 0/1
-│       ├── splitting.py      2. stratified random train/test split
-│       ├── preprocessing.py  3. one-hot, scaling, passthrough (fitted on train only)
-│       └── pipeline.py       4. chains cleaning + preprocessing into one object
+├── src/churn_platform/   application package (all importable code)
+│   ├── app.py              Streamlit screen
+│   ├── workflow.py         train_from_file, score_file, drift_report
+│   ├── ingest.py           upload checks with plain-language errors and fixes
+│   ├── cleaning.py         fixed rules: TotalCharges, yes/no flags, Churn 0/1
+│   ├── splitting.py        stratified random train/test split
+│   ├── preprocessing.py    one-hot, scaling, passthrough (fitted on train only)
+│   ├── pipeline.py         chains cleaning + preprocessing (+ model) in one object
+│   ├── baselines.py        majority-class and logistic regression baselines
+│   ├── models.py           random forest, gradient boosting, the four candidates
+│   ├── evaluation.py       cross-validation, the margin rule, held-back metrics
+│   ├── training.py         the training path and its TrainingResult
+│   ├── drivers.py          permutation importance and its stability across seeds
+│   ├── drift.py            PSI per column against a saved training reference
+│   ├── scoring.py          probabilities and High/Medium/Low risk bands
+│   ├── recommendations.py  rule-based retention actions with reasons
+│   ├── persistence.py      save/load the model; model-path and demo-mode settings
+│   ├── synthetic.py        made-up Telco-shaped customers
+│   └── demo.py             the demo model built into the image
 ├── tests/                pytest tests, mirroring src/churn_platform/
-├── data/                 git-ignored datasets: raw/ (untouched downloads), processed/ (planned)
-├── .python-version       Python 3.12
-├── pyproject.toml        project metadata, dependencies, build backend (uv_build)
+├── data/                 git-ignored datasets (never committed)
+├── models/               git-ignored saved models (never committed)
+├── Dockerfile, compose.yaml, render.yaml, .env.example   running and deploying
+├── .github/workflows/ci.yml, .pre-commit-config.yaml    automated checks
+├── pyproject.toml        project metadata, dependencies, tool settings
 ├── uv.lock               exact pinned versions (generated by uv, never hand-edit)
-├── SCOPE.md              what v1 includes and excludes
+├── README.md, MODEL_CARD.md, SCOPE.md   what it is, its limits, what v1 includes
 ├── DECISIONS.md          decision log, git-ignored
 └── CLAUDE.md             this file
 ```
@@ -58,6 +79,8 @@ uv add <package>             # add a dependency (updates pyproject.toml and uv.l
 uv run python <file>         # run a script inside the pinned environment
 uv run python -m churn_platform.<module>   # run a module from the package
 uv run pytest                # run the tests in tests/
+uv run streamlit run src/churn_platform/app.py   # run the app on port 8501
+docker compose up --build    # run the app in Docker (models/ is mounted)
 uv run ruff check src tests          # lint (PEP 8, unused code, imports, naming)
 uv run ruff format --check src tests   # check layout (drop --check to rewrite)
 uv run mypy                            # type check src/ (runs in CI, not in the hook)
