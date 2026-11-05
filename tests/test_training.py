@@ -98,7 +98,9 @@ def test_the_chosen_model_gets_a_one_time_check_on_the_held_back_rows() -> None:
 def test_drivers_rank_the_model_input_columns_and_count_the_stable_ones() -> None:
     result = train_baseline(make_raw_customers(), make_small_preprocessor())
 
-    assert result.drivers.index[0] == "tenure"
+    # In this table TotalCharges is exactly tenure * 30.5, so the two carry the same
+    # information and swap first place between machines; either may come first.
+    assert set(result.drivers.index[:2]) == {"tenure", "TotalCharges"}
     assert "customerID" not in result.drivers.index
     assert 0 <= result.shared_drivers <= 10
 
